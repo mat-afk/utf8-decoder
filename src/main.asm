@@ -1,4 +1,4 @@
-%include "include/constants.inc"
+%include "include/io.inc"
 
 global _start
 
