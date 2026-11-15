@@ -24,6 +24,9 @@ section .text
 ; ----------------------------------------------------------------
 ; decodifica_utf8(int primeiro_byte, int descritor_arquivo)
 ;
+; Decodifica uma sequência UTF-8 de até 4 bytes em seu code
+; point Unicode correspondente.
+;
 ; Parâmetros:
 ;   [rbp + 16] = primeiro_byte
 ;   [rbp + 24] = descritor_arquivo
@@ -79,25 +82,25 @@ decodifica_utf8:
     ; porque 0xxxxxxx < 10000000 = 0x80 para quaisquer x.
 
     ; 1 byte: primeiro_byte = 0xxxxxxx se e somente se primeiro_byte < 10000000
-    cmp eax, 0x80
+    cmp eax, UTF8_1_MASK
     jb .one_byte
 
     ; 2 bytes: primeiro_byte = 110xxxxx
     mov edx, eax
-    and edx, 0xE0
-    cmp edx, 0xC0
+    and edx, UTF8_2_MASK
+    cmp edx, UTF8_2_PATTERN
     je .two_bytes
 
     ; 3 bytes: primeiro_byte = 1110xxxx
     mov edx, eax
-    and edx, 0xF0
-    cmp edx, 0xE0
+    and edx, UTF8_3_MASK
+    cmp edx, UTF8_3_PATTERN
     je .three_bytes
 
     ; 4 bytes: primeiro_byte = 11110xxx
     mov edx, eax
-    and edx, 0xF8
-    cmp edx, 0xF0
+    and edx, UTF8_4_MASK
+    cmp edx, UTF8_4_PATTERN
     je .four_bytes
 
     ; n > 4 bytes: não é uma sequência UTF-8 válida
@@ -107,14 +110,14 @@ decodifica_utf8:
 ; sempre são da forma 10xxxxxx.
 
 ; Se n = 1, então sequência = 0xxxxxx. Retirar a máscara não faz diferença ao code point final, então simplesmente atribuímos
-; code point parcial = [RBP - 8] = EAX.
+; code point parcial = [RBP - 8] = RAX.
 .one_byte:
     mov [rbp - 8], rax
     jmp .done
 
 ; Se n = 2, então sequência = 110xxxxx 10xxxxxx
 .two_bytes:
-    and eax, 0x1F                   ; Seleciona os bits x do EAX = primeiro_byte = 110xxxxx usando 0x1F = 00011111
+    and eax, UTF8_2_X               ; Seleciona os bits x do EAX = primeiro_byte = 110xxxxx usando 0x1F = 00011111
     mov [rbp - 8], rax              ; Põe RAX em code point parcial = [RBP - 8]
 
     mov qword [rbp - 16], 1         ; Falta um byte de continuação 10xxxxxx
@@ -122,18 +125,18 @@ decodifica_utf8:
 
 ; Se n = 3, então sequência = 1110xxxx 10xxxxxx 10xxxxxx
 .three_bytes:
-    and eax, 0x0F                   ; Seleciona os bits x do EAX = primeiro_byte = 110xxxxx usando 0x0F = 00001111
+    and eax, UTF8_3_X               ; Seleciona os bits x do EAX = primeiro_byte = 110xxxxx usando 0x0F = 00001111
     mov [rbp - 8], rax              ; Põe RAX em code point parcial = [RBP - 8]
 
-    mov qword [rbp - 16], 2         ; Faltam dois byte de continuação 10xxxxxx 10xxxxxx
+    mov qword [rbp - 16], 2         ; Faltam dois bytes de continuação 10xxxxxx 10xxxxxx
     jmp .decode_continuations
 
 ; Se n = 4, então sequência = 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
 .four_bytes:
-    and eax, 0xF8                   ; Seleciona os bits x do EAX = primeiro_byte = 11110xxx usando 0xF8 = 11111000
+    and eax, UTF8_4_X               ; Seleciona os bits x do EAX = primeiro_byte = 11110xxx usando 0xF8 = 11111000
     mov [rbp - 8], rax              ; Põe RAX em code point parcial = [RBP - 8]
 
-    mov qword [rbp - 16], 3         ; Faltam dois byte de continuação 10xxxxxx 10xxxxxx 10xxxxxx
+    mov qword [rbp - 16], 3         ; Faltam três bytes de continuação 10xxxxxx 10xxxxxx 10xxxxxx
     jmp .decode_continuations
 
 .decode_continuations:
@@ -175,7 +178,7 @@ decodifica_utf8:
 ; incorpora_continuacao(int descritor_arquivo, char* unicode)
 ;
 ; Lê um byte de continuação UTF-8 e incorpora seus 6 bits ao code
-; point em construção
+; point em construção.
 ;
 ; Parâmetros:
 ;   [rbp + 16] = descritor do arquivo de entrada
@@ -206,7 +209,7 @@ incorpora_continuacao:
     jne .error
 
     movzx eax, byte [rbp - 1]       ; Extrai os 6 bits do byte usando 0x3F = 00111111
-    and eax, 0x3F
+    and eax, UTF8_CONT_MASK
 
     mov rdx, [rbp + 24]             ; Atribui o code point em construção ao code point local
     shl qword [rdx], 6              ; Shifta o novo code point 6 bits à esquerda
