@@ -5,78 +5,105 @@
 ; acrescenta LF e 
 ; termina a string com NUL.
 
-; ISSO AINDA É UM PSEUDO-CÓDIGO E ESTOU CIENTE DE QUE CONTÉM MUITOS ERROS
-; !!!!!!!!!!!!!!!!!!!!!!!!!!
+global gera_string_hexadecimal
 
 section .text
 
 gera_string_hexadecimal:
 
-    mov rdx, valor ; recebe valor
-    mov rdi, buffer ; recebe endereço do buffer
+    push rbp ; topo da pilha
+    mov rbp, rsp
+    mov rax, [rbp + 16] ; rax recebe valor             
+    mov rdi, [rbp + 24] ; rdi recebe endereço do buffer
 
-    ; 1. Adiciona prefixo 0x 
-    mov i, 0
-    mov byte [rdi + i], '0' ; buffer[0] = 0
-    inc i
-    mov byte [rdi + i], 'x' ; buffer[1] = x
+    ; 1. Adiciona prefixo 0x em buffer
+    mov byte [rdi], '0' ; buffer[0] = 0
+    mov byte [rdi + 1], 'x' ; buffer[1] = x
 
-    ; 2. Converte o valor de decimal para hexa
+    ; 2. Converte o valor de decimal para hexa (retorna representação invertida no buffer)
 
-    ; while (valor != 0):
-    ;   resultado = (int) valor / 16
-    ;   resto = valor - 16 * resultado
-    ; 
-    ;   if resto < 10:
-    ;       buffer[i] = resto + '0'
-    ;   else:
-    ;       buffer[i] = resto - 10 + 'A'
-    ; 
-    ;   valor = resultado
-    ;   i++
+    mov r8, 2 ; r8 armazena índices i relativos às posições do buffer
+    push r8 ; armazena posição de início da inversão do buffer
 
     loop_while:
+
         ; while (valor != 0)
-        cmp valor, 0
-        jz end_first_while
-        push valor
+        cmp rax, 0
+        jz end_first_while 
 
-        shr valor, 4 ; resultado = valor / 16
-        pop resto
-        sub resto, [valor*16] ; resto = valor - 16 * resultado
+        push rax ; armazena valor original na pilha
+        shr rax, 4 ; resultado = (int) valor / 16
 
-        cmp resto, 10
-        inc i ; i++
-        jl add_algarismo
-        jge add_letra
+        pop rdx ; rdx armazena valor original
+        shl rax, 4 ; 16 * resultado
+        sub rdx, rax ; rdx armazena resto da divisão
 
-add_letra:
-        sub resto, 10 
-        add resto, 'A' ; transforma em caractere ASCII maiúsculo correspondente 
-        mov byte [rdi + i], resto ; adiciona ao buffer
+        cmp rdx, 10
+        jl add_algarismo ; if resto < 10:
+        jge add_letra ; else:
+
+    add_letra:
+
+        ; buffer[i] = resto - 10 + 'A'
+        sub rdx, 10 
+        add rdx, 'A' ; caractere ASCII maiúsculo correspondente 
+
+        mov byte [rdi + r8], dl ; adiciona ao buffer
+        inc r8 ; i++
         jmp loop_while
 
-add_algarismo:
-        add resto, '0' ; transforma algarismo em caractere
-        mov byte [rdi + i], resto ; adiciona ao buffer
-        inc i ; i++
+    add_algarismo:
+
+        ; buffer[i] = resto + '0'
+        add rdx, '0' ; caractere correspondente
+
+        mov byte [rdi + r8], dl ; adiciona ao buffer
+        inc r8 ; i++
         jmp loop_while
 
     end_first_while: 
+        dec r8
+        push r8 ; armazena índice final da região invertida do buffer
 
-        ; 3. Adiciona LF
-        inc i
-        mov byte [rdi + i], 0x0A     ; buffer[len-2] = LF
+        ; 3. Adiciona LF e termina string com NUL
+        inc r8
+        mov byte [rdi + r8], 0x0A     ; buffer[len-2] = LF
+        inc r8 
+        mov byte [rdi + r8], 0     ; buffer[len-1] = NUL
 
-        ; 4. Termina a string com NUL
-        inc i
-        mov byte [rdi + i], 0     ; buffer[len-1] = NUL
+    ; 4. Arruma a ordem da string inserida em buffer
+    reordenar:
+        pop r11 ; índice do fim da inversão 
+        pop r10 ; índice do início da inversão
+        mov r9, 0 ; posição relativa para identificar e trocar pares
 
-        ; 4. Arruma a ordem da string dentro de buffer
-        mov j, 0
+        ; buffer está invertido de buffer[r10] a buffer[r11]
         loop_trocas:
-            xchg [rdi + j], [rdi + i - j]
-            inc j
 
-            cmp i, i-j
-            jne loop_trocas 
+            ; while (r9 < (fim-inicio+1)/2)
+            mov rax, r11
+            sub rax, r10
+            inc rax
+            shr rax, 1
+
+            cmp r9, rax
+            jge end_trocas
+
+            ; calcula os índices do par (buffer[r10+r9] e buffer[r11-r9])
+            lea rax, [r10+r9] ; rax = r10 + r9
+            mov rbx, r11
+            sub rbx, r9 ; rbx = r11 - r9
+
+            ; troca valores do par
+            mov dl, [rdi + rbx]
+            xchg dl, [rdi + rax]
+            mov [rdi + rbx], dl
+
+            ; retoma loop para próximo par
+            inc r9
+            jmp loop_trocas
+
+    end_trocas:
+        mov rsp, rbp
+        pop rbp
+        ret
