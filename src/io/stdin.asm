@@ -49,8 +49,8 @@ le_string:
     jle .error
 
     cmp byte [rsi + rax - 1],0xA ; Compara para ver se o ultimo byte é '\n'
-    ; 'Hello World\n' não pularia e \n seria substituido em end
-    ; 'Hello World' pularia, rax não seria decrementado e 
+    ; 'Hello World\n' pularia e \n seria substituido em end
+    ; 'Hello World' não pularia, rax não seria decrementado e 
     ;  o byte 'reservado' anteriormente seria preenchido
     ;  por 0
     jnz .end
@@ -63,4 +63,39 @@ le_string:
 .error:
     mov byte [rsi], 0   ; esvazia o buffer
     mov rax,-1          ; retorna -1 em erro
+    ret
+
+; ----------------------------------------------------------------
+; escreve_string(char* buffer)
+;
+; Escreve na saída padrão uma string terminada em NUL. Usa sys_write.
+;
+; Parâmetros:
+;   [rdi] = buffer
+;
+; Retorna:
+;   RAX =  quantidade de caracteres escritos
+;
+; Pré-condição:
+;     String existente e terminada em 0
+; ----------------------------------------------------------------
+
+global escreve_string
+
+
+escreve_string:
+    ; Configura sys_write
+    mov rax, 1
+    mov rsi, rdi      ; Endereço do buffer
+    mov rdi, 1        ; Descritor de arquivo 1 para stdout
+    mov rdx, 0        ; Inicializa o contador de bytes
+    
+.while:
+    cmp byte [rsi + rdx], 0 ; vê se chegou ao nul
+    jz  .end    ;se chegou termina
+    inc rdx     ;se não continua o loop 
+    jmp .while
+
+.end:
+    syscall
     ret
