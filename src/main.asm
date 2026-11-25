@@ -1,19 +1,25 @@
 %include "include/io.inc"
+%include "io/stdin.asm"
 
 global _start
 
 section .data
-message: dq "Hello, world", 10
+message: db "Hello World", 0
 length:  equ $ - message
 
 section .text
 _start:
-    mov rax, SYS_WRITE
-    mov rdi, STDOUT
-    mov rsi, message
-    mov rdx, length
-    syscall
+    mov rdi, message
+    mov rsi, 10
+    call le_string
+    
+    cmp rax,0
+    jle .end
 
-    mov rax, SYS_EXIT
+    mov rdi, message
+    call escreve_string
+    
+.end:
+    mov rax, 60
     mov rdi, 0
     syscall
